@@ -5,7 +5,11 @@
 # メイン部分も関数化
 # PDFファイル作成機能の追加（WindowsでExcelがインストールされていることが必要）
 # Windows, macOS両方で動作するように処理を分ける（macOSではPDF作成機能を使わないように）
-# version = "Ver.1.0.0"
+
+
+# 変更履歴
+# Ver.1.0.1 OSの判定処理を変更。macOSをelifにして、elseでWindows, macOS以外のOSはの場合、プログラムを終了するように変更
+# version = "Ver.1.0.1"
 from glob import glob
 from datetime import datetime
 from time import time
@@ -35,7 +39,7 @@ def gui_widget(now_date):
     default_save_folder = f"{abs_dir}/invoice" # GUIに表示しておく請求書保存先フォルダのデフォルトフォルダ名
 
     # ウィジェットの定義
-    # WindowsとmacOSでウィジェットを変更する
+    # WindowsとmacOSでウィジェットを変更する。他のOSの場合はポップアップで非対応の旨を表示させてプログラムを終了
     if os_type == "Windows": # Windowsの場合
         layout = [
         [sg.Text("テンプレートファイル選択"), sg.InputText(default_text=default_template_file, key="filepath"), sg.FileBrowse("Browse", initial_folder=initial, file_types=(("Excel files", "*.xlsx"), ("All files", "*.*")))],
@@ -48,7 +52,7 @@ def gui_widget(now_date):
         [sg.Button("終了", size=(10, 1))],
         ]
         return layout
-    else: # macOSの場合
+    elif os_type == "Darwin": # macOSの場合
         layout = [
         [sg.Text("テンプレートファイル選択"), sg.InputText(default_text=default_template_file, key="filepath"), sg.FileBrowse("Browse", initial_folder=initial, file_types=(("Excel files", "*.xlsx"), ("All files", "*.*")))],
         [sg.Text("売上データフォルダ選択", size=(21, 1)), sg.InputText(default_text=default_sales_folder, key="sales_folderpath", size=(45, 1)), sg.FolderBrowse("Browse", initial_folder=f'{initial}/salesbooks',)],
@@ -60,6 +64,9 @@ def gui_widget(now_date):
         [sg.Button("終了", size=(10, 1))],
         ]
         return layout
+    else: # それ以外のOSの場合
+        sg.popup_error("対応していないOSです。\nプログラムを終了します。", title="エラー") # ポップアップを表示
+        raise SystemExit("対応していないOSです。") # 例外処理を使いプログラムを終了させる
 
 
 # ファイルの存在確認を行う関数
@@ -114,7 +121,8 @@ def write_to_excel(grouped, ws_title, template_file, cell_date, value):
             file_name = row["購入者"] # ファイル名
             without_space_file_name = file_name.replace(" ", "") # ファイル名からスペースを削除する
             ws["G3"] = cell_date # 請求書の日付
-            ws["C10"] = f"{ws_title}分のご請求" # 件名
+            # ws["C10"] = f"{ws_title}分のご請求" # 件名
+            ws["B9"] = f"{ws_title}分のご請求" # 件名
             bonding_value = f"{row['品目']}({row['日付'].strftime('%m/%d')})" # 品目と日付を1つのセルに書く(内訳欄)変数を定義
             ws.cell(row=i + 15, column=2, value=bonding_value) # 内訳欄
             ws.cell(row=i + 15, column=5, value=row["個数"]) # 個数欄
