@@ -1,33 +1,14 @@
-# 請求書作成ボタンが押された際、すぐに実行するのではなくポップアップで確認を入れるようにした
-# ファイルやディレクトリを指定しているかの確認を追加
-# 関数化
-# エラーハンドリングを追加
-# メイン部分も関数化
-# PDFファイル作成機能の追加（WindowsでExcelがインストールされていることが必要）
-# Windows, macOS両方で動作するように処理を分ける（macOSではPDF作成機能を使わないように）
-
-
-# 変更履歴
-# Ver.1.0.1 OSの判定処理を変更。macOSをelifにして、elseでWindows, macOS以外のOSはの場合、プログラムを終了するように変更
-# version = "Ver.1.0.1"
 from glob import glob
 from datetime import datetime
 from time import time
 import openpyxl as opx
 import pandas as pd
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import os
 import platform
 
-os_type = platform.system() # OSの種類を取得
-if os_type == "Windows": # OSがWindowsだった場合、以下のモジュールをインポートする
-    import win32com.client as win32
-    import winreg # Windowsのレジストリの値を参照するため（Excelがインストールされているかどうかを確認する）
 
-os.chdir(os.path.dirname(os.path.abspath(__file__))) # スクリプトの場所をカレントディレクトリにする
-abs_dir = os.getcwd() # カレントディレクトリの絶対パスを取得
-c_dir = os.path.basename(os.getcwd()) # カレントディレクトリのディレクトリ名のみ取得
-excel_version = "15.0" # 必要なExcelのバージョンを指定。2016以上のバージョンは16.0
+version = "1.0.2"
 
 # ウィジェット部分の関数
 def gui_widget(now_date):
@@ -72,9 +53,9 @@ def gui_widget(now_date):
 # ファイルの存在確認を行う関数
 def check_file_exists(value):
     # event（辞書）に入っている値を確認し、ファイルやディレクトリの存在確認を行う
-    template_file_check = value.get("filepath") # PySimpleGUIで入力されたテンプレートファイルのパス
-    sales_folder_check = value.get("sales_folderpath") # PySimpleGUIで入力された売上データディレクトリのパス
-    save_folder_check = value.get("savefolder") # PySimpleGUIで入力された保存先ディレクトリのパス
+    template_file_check = value.get("filepath") # FreeSimpleGUIで入力されたテンプレートファイルのパス
+    sales_folder_check = value.get("sales_folderpath") # FreeSimpleGUIで入力された売上データディレクトリのパス
+    save_folder_check = value.get("savefolder") # FreeSimpleGUIで入力された保存先ディレクトリのパス
     path_exists = os.path.isfile(template_file_check) and os.path.isdir(sales_folder_check) and os.path.isdir(save_folder_check) # ファイルとディレクトリが存在するかを確認
     return path_exists # True or False
 
@@ -83,14 +64,19 @@ def check_file_exists(value):
 def opx_to_pandas_df(filename_sales, window):
     window["result"].update("Excel作成中") # 実行中の動作表示
     window.refresh() # 表示更新
-    df = pd.DataFrame(columns=["日付","購入者","品目", "個数", "値段", "小計"]) # データフレームの列を定義
+    # df = pd.DataFrame(columns=["日付","購入者","品目", "個数", "値段", "小計"]) # データフレームの列を定義
     row = 0 # 行番号を定義。dfでは0から始まる
+    columns = [] # データフレームのカラムを定義
+    df = pd.DataFrame() # からのデータフレームを作成
+
     for file in filename_sales: # xlsxファイルを順に変数fileに代入
         print(f"read_Excel_file: {file.replace("/", "\\")}") # 読み込みファイルを表示。最終的にはログファイルに記録したい
         wb_sales = opx.load_workbook(file, data_only=True) # xlsxファイルを数値で読み込む（Excelの計算式から計算結果を数値で書き込む）
-        ws_sales = wb_sales["3月"] # 所定のワークシートを選択
+        # ws_sales = wb_sales["3月"] # 所定のワークシートを選択
+        ws_sales = wb_sales.active # アクティブなシートを選択
         ws_title = ws_sales.title # シート名の取得（請求月表示に使用）
         max_row = ws_sales.max_row # シートの最終行を取得。openypxlで使う際は0始まりではなく1始まりなので+1する
+
         for r in range(4, max_row + 1):
             if ws_sales.cell(r, 1).value is not None: # セルが空でない場合
                 df.loc[row, "日付"] = ws_sales.cell(r, 1).value # 日付をr行のA列から取得
@@ -117,12 +103,15 @@ def write_to_excel(grouped, ws_title, template_file, cell_date, value):
         ws = wb.active # アクティブシートを取得
 
         for i, row in customer_df.iterrows(): # 購入者毎にループ
-            ws["B4"] = row["購入者"] # 請求書テンプレートファイルの"B4"セルに購入者名を入力
+            # ws["B4"] = row["購入者"] # 請求書テンプレートファイルの"B4"セルに購入者名を入力
+            ws.cell(row=4, column=2, value=row["購入者"])
             file_name = row["購入者"] # ファイル名
             without_space_file_name = file_name.replace(" ", "") # ファイル名からスペースを削除する
-            ws["G3"] = cell_date # 請求書の日付
+            # ws["G3"] = cell_date # 請求書の日付
+            ws.cell(row=3, column=7, value=cell_date)
             # ws["C10"] = f"{ws_title}分のご請求" # 件名
-            ws["B9"] = f"{ws_title}分のご請求" # 件名
+            # ws["B9"] = f"{ws_title}分のご請求" # 件名
+            ws.cell(row=9, column=2, value=f"{ws_title}分のご請求")
             bonding_value = f"{row['品目']}({row['日付'].strftime('%m/%d')})" # 品目と日付を1つのセルに書く(内訳欄)変数を定義
             ws.cell(row=i + 15, column=2, value=bonding_value) # 内訳欄
             ws.cell(row=i + 15, column=5, value=row["個数"]) # 個数欄
@@ -199,7 +188,7 @@ def main():
     today = datetime.now() # 日時（当日）を取得
     now_date = today.strftime("%Y年%m月%d日") # プログラム実行時に日付にする場合に使う
 
-    window = sg.Window(f"請求書作成アプリ", gui_widget(now_date)) # ウィンドウを開く
+    window = sg.Window(f"請求書自動作成アプリ", gui_widget(now_date)) # ウィンドウを開く
 
     while True:
         event, value = window.read() # イベントと値を取得
@@ -257,6 +246,18 @@ def main():
                 sg.popup("ファイルやフォルダの指定に不備があります。\n確認してください。", title="確認") # ポップアップを表示
 
     window.close() # ウィンドウを閉じる
+
+version = "1.0.2"
+
+os_type = platform.system() # OSの種類を取得
+if os_type == "Windows": # OSがWindowsだった場合、以下のモジュールをインポートする
+    import win32com.client as win32
+    import winreg # Windowsのレジストリの値を参照するため（Excelがインストールされているかどうかを確認する）
+
+os.chdir(os.path.dirname(os.path.abspath(__file__))) # スクリプトの場所をカレントディレクトリにする
+abs_dir = os.getcwd() # カレントディレクトリの絶対パスを取得
+c_dir = os.path.basename(os.getcwd()) # カレントディレクトリのディレクトリ名のみ取得
+excel_version = "15.0" # 必要なExcelのバージョンを指定。2016以上のバージョンは16.0
 
 
 # メイン関数を実行
